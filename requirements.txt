@@ -1,6 +1,20 @@
-# Core runtime. `ultralytics` pulls in torch/torchvision automatically.
-# On a GPU box, install a CUDA build of torch first (see pytorch.org) for speed.
-ultralytics>=8.3.0
-opencv-python>=4.8.0
-numpy>=1.24
-pyyaml>=6.0
+# Direct dependencies, pinned to the versions this project is verified against.
+# Regenerate the full transitive lock with:
+#     pip freeze > requirements.lock.txt
+#
+# Verified environment: Python 3.13.5 on Windows, CPU-only.
+#   torch 2.13.0+cpu, torchvision 0.28.0, matplotlib 3.11.1 (all pulled in by
+#   ultralytics). Those are deliberately NOT pinned here so a GPU box can install
+#   a CUDA build of torch first without this file clobbering it back to CPU.
+#   Use requirements.lock.txt when you want byte-identical reproduction.
+
+ultralytics==8.4.116
+opencv-python==5.0.0.93
+numpy==2.5.1
+pyyaml==6.0.3
+
+# Required by the ByteTrack tracker (linear assignment). Ultralytics does not
+# declare it and instead AutoUpdates it into your environment on first track()
+# call — which silently mutates a pinned env, and fails outright on a machine
+# with no network. Declaring it here keeps installs explicit and offline-safe.
+lap==0.5.13

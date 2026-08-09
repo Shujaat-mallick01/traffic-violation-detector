@@ -38,15 +38,26 @@ def main():
                     help="detection confidence threshold")
     ap.add_argument("--device", default=None,
                     help="e.g. '0' for first CUDA GPU, or 'cpu'")
+    ap.add_argument("--stride", type=int, default=1,
+                    help="detect on every Nth frame (CPU speedup; 3 is a good "
+                         "start). Timestamps stay true, so rule thresholds in "
+                         "seconds are unaffected.")
+    ap.add_argument("--imgsz", type=int, default=640,
+                    help="detector input size (416 is ~2x faster than 640 on "
+                         "CPU, at some cost to small/distant objects)")
     ap.add_argument("--out", default="evidence",
                     help="output directory for evidence")
     ap.add_argument("--show", action="store_true",
                     help="show a live annotated window (press q to quit)")
     args = ap.parse_args()
 
+    if args.stride < 1:
+        ap.error("--stride must be >= 1")
+
     cfg = CameraConfig.load(args.config)
     run(parse_source(args.source), cfg, model_path=args.model,
-        show=args.show, out_dir=args.out, conf=args.conf, device=args.device)
+        show=args.show, out_dir=args.out, conf=args.conf, device=args.device,
+        stride=args.stride, imgsz=args.imgsz)
 
 
 if __name__ == "__main__":

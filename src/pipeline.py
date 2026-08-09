@@ -30,10 +30,22 @@ def build_rules(cfg: CameraConfig) -> List[ViolationRule]:
 
 def run(source, cfg: CameraConfig, model_path: str = "yolo26n.pt",
         show: bool = False, out_dir: str = "evidence",
-        conf: float = 0.3, device: Optional[str] = None) -> int:
+        conf: float = 0.3, device: Optional[str] = None,
+        stride: int = 1, imgsz: int = 640) -> int:
+    """Process `source` against `cfg`, writing evidence for every violation.
+
+    stride > 1 runs detection on every Nth frame only — the main CPU speedup.
+    Skipped frames are still *grabbed* (decoded-but-not-processed) so `frame_idx`
+    keeps counting true source frames and every timestamp stays wall-accurate.
+    Rules must therefore express their thresholds in seconds, never in frames,
+    or their behaviour would silently change with stride.
+    """
     import cv2
 
-    detector = Detector(model_path=model_path, conf=conf, device=device)
+    if stride < 1:
+        raise ValueError(f"stride must be >= 1, got {stride}")
+
+    detector = Detector(model_path=model_path, conf=conf, device=device, imgsz=imgsz)
     rules = build_rules(cfg)
     evidence = EvidenceWriter(out_dir)
     print(f"Enabled rules: {[r.name for r in rules] or '(none — check camera config)'}")
@@ -42,14 +54,27 @@ def run(source, cfg: CameraConfig, model_path: str = "yolo26n.pt",
     if not cap.isOpened():
         raise RuntimeError(f"Could not open source: {source}")
     fps = cfg.fps or cap.get(cv2.CAP_PROP_FPS) or 25.0
+    if stride > 1:
+        print(f"Stride {stride}: detecting at ~{fps / stride:.1f} of {fps:.0f} fps "
+              f"(timestamps remain true).")
 
     frame_idx = 0
+    processed = 0
     total = 0
     try:
         while True:
+            # Cheaply discard the frames this stride skips: grab() decodes without
+            # the colour-convert + array copy that retrieve()/read() would do.
+            if frame_idx % stride != 0:
+                if not cap.grab():
+                    break
+                frame_idx += 1
+                continue
+
             ok, frame = cap.read()
             if not ok:
                 break
+            processed += 1
             ts = frame_idx / fps
             tracks = detector.track(frame)
 
@@ -82,7 +107,8 @@ def run(source, cfg: CameraConfig, model_path: str = "yolo26n.pt",
         if show:
             cv2.destroyAllWindows()
 
-    print(f"\nDone. {frame_idx} frames processed, {total} violations logged to {out_dir}/")
+    print(f"\nDone. {frame_idx} frames read, {processed} detected on, "
+          f"{total} violations logged to {out_dir}/")
     return total
 
 

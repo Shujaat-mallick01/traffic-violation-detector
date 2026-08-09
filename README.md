@@ -89,6 +89,60 @@ python run.py --source "rtsp://user:pass@host:554/stream" --config config/cam1.y
 python run.py --source sample.mp4 --config config/cam1.yaml --model yolo11n.pt --device 0
 ```
 
+### Running on a CPU-only machine
+
+Workable for prototyping on **recorded clips**. Live RTSP will not keep up — the
+capture buffer grows faster than you can drain it and latency runs away.
+
+```bash
+python run.py --source sample.mp4 --config config/cam1.yaml --show \
+              --stride 3 --imgsz 416
+```
+
+- `--stride N` detects on every Nth frame. Near-linear speedup.
+- `--imgsz` sets inference resolution (default 640). Cost is roughly quadratic,
+  so 416 is about 2× faster — at the cost of small and distant objects, which is
+  exactly what a traffic camera is full of. Check recall before keeping it.
+
+Measured with `yolo26n.pt` on a CPU-only laptop (Python 3.13, torch 2.13+cpu):
+
+| `--imgsz` | throughput |
+|---|---|
+| 640 (default) | ~16 FPS |
+| 416 | ~29 FPS |
+
+Treat those as an **upper bound**: they were measured on an empty frame, so no
+boxes were detected and no tracks associated. Real traffic footage — dozens of
+vehicles, continuous tracker association — runs materially slower. Benchmark on
+your own clip before assuming a stride setting keeps up.
+
+Skipped frames are still *grabbed*, so `frame_idx` keeps counting true source
+frames and **every timestamp stays wall-accurate at any stride**. This is why
+rule thresholds are written in seconds rather than frames: `--stride 3` used to
+mean wrong-way needed 3× as much real evidence before firing, silently. If you
+add a rule, express its thresholds in seconds too — `tests/test_wrong_way.py`
+asserts that detection time is stride-invariant, and will catch you if you don't.
+
+## Tests
+
+```bash
+python tests/run_all.py            # or: pytest tests/
+```
+
+31 tests over the geometry primitives and all three active rules. They need no
+model, no weights and no network — geometry and rule logic are deliberately
+dependency-free, so the suite runs on a bare interpreter. Only the four HSV
+light-state tests touch OpenCV, and they skip themselves if it is absent.
+
+The suite is written to pin down the behaviour that is easy to break silently:
+
+- detection time is **stride-invariant** (`test_wrong_way`)
+- stationary time is never counted as evidence of moving
+- an unknown light state **never** produces a red-light violation
+- a lone red pixel never sets the light state to red
+- each rule emits **one** violation per track, not one per frame
+- per-track state is pruned, so a 24/7 stream does not leak memory
+
 ## Output
 
 - `evidence/snapshots/*.jpg` — one annotated frame per violation.

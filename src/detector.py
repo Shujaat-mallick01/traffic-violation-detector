@@ -53,6 +53,7 @@ class Detector:
         tracker: str = "bytetrack.yaml",
         classes: Optional[Sequence[int]] = None,
         device: Optional[str] = None,
+        imgsz: int = 640,
     ):
         # Imported lazily so this module (and the geometry/rule unit tests) can be
         # imported without ultralytics installed.
@@ -63,6 +64,11 @@ class Detector:
         self.iou = iou
         self.tracker = tracker
         self.device = device
+        # Inference resolution. Cost scales ~quadratically, so on CPU this is the
+        # single biggest speed knob: 416 is roughly 2x faster than 640. Small or
+        # distant objects are the first thing you lose — check recall before
+        # keeping a lower value.
+        self.imgsz = imgsz
         self.classes = list(classes) if classes is not None else list(COCO_CLASSES)
 
     def track(self, frame) -> List[Track]:
@@ -72,6 +78,7 @@ class Detector:
             persist=True,
             conf=self.conf,
             iou=self.iou,
+            imgsz=self.imgsz,
             tracker=self.tracker,
             classes=self.classes,
             device=self.device,
