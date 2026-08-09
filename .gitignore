@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- Model weights (downloaded on first run, not source) ---
+*.pt
+*.onnx
+*.engine
+*.torchscript
+
+# --- Run outputs ---
+evidence/
+runs/
+*.log
+
+# --- Data (never commit raw/large data; see the ai-ml-playbook skill) ---
+data/
+
+# --- Per-camera calibration ---
+# Zone YAMLs are deployment-specific and may embed RTSP credentials.
+# The committed example stays; real camera configs do not.
+config/*.yaml
+!config/camera_example.yaml
+
+# --- Tooling / OS ---
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,32 @@
+# Example camera zone config. Coordinates are pixels in THIS camera's frame.
+# Generate your own with:  python -m src.calibrate --source <video> --out config/cam1.yaml
+# The numbers below are placeholders for a ~960x540 frame — replace them.
+
+name: cam1
+fps: 25
+
+# Vehicles that sit stationary inside these polygons are flagged as illegal parking.
+no_parking:
+  - name: no_parking_1
+    polygon: [[420, 300], [780, 300], [820, 520], [380, 520]]
+
+# Vehicles crossing a stop line from the 'before' side while the light is red.
+# Flip before_sign if crossings register from the wrong direction.
+stop_lines:
+  - name: stopline_1
+    a: [200, 460]
+    b: [900, 460]
+    before_sign: 1.0
+
+# Allowed travel direction per lane. `direction` is a (dx, dy) vector in image
+# space: [0, 1] means "downward in the frame is the correct way to travel".
+lanes:
+  - name: lane_1
+    polygon: [[300, 200], [600, 200], [650, 700], [250, 700]]
+    direction: [0, 1]
+
+# Optional: the bounding box of the signal head to read for red/green state.
+# Remove this block if there is no signal in view (red-light rule then stays off).
+light_regions:
+  - name: light_1
+    bbox: [50, 40, 90, 140]

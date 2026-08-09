@@ -1,0 +1,6 @@
+# Core runtime. `ultralytics` pulls in torch/torchvision automatically.
+# On a GPU box, install a CUDA build of torch first (see pytorch.org) for speed.
+ultralytics>=8.3.0
+opencv-python>=4.8.0
+numpy>=1.24
+pyyaml>=6.0
