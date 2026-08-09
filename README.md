@@ -52,6 +52,11 @@ video / RTSP ──▶ Detector (YOLO26 + ByteTrack) ──▶ tracks (persisten
   needs its zones drawn once**; the rules mean nothing without them.
 - `src/violations/` — one file per rule, each stateful and self-debouncing.
 - `src/pipeline.py` — the per-frame loop wiring it together.
+- `tools/derive_lane.py` — headless lane bootstrap, for when the GUI is not an
+  option. `eval/` — precision/recall scoring. `tests/` — 42 dependency-free tests.
+
+Every rule threshold is expressed in **seconds**, never frames, so `--stride`
+changes throughput without changing behaviour. Keep it that way when adding rules.
 
 ---
 
@@ -75,6 +80,45 @@ python -m src.calibrate --source sample.mp4 --out config/cam1.yaml
 Keys: `p` no-parking polygon · `s` stop line · `l` lane (+direction) ·
 `g` light region · `n` finish shape · `u` undo · `w` write · `q` quit.
 See `config/camera_example.yaml` for the resulting format.
+
+**This needs a desktop session** — it opens an OpenCV window, so it will not run
+over a plain SSH connection or in a container. Calibrate locally, ship the YAML.
+
+### Bootstrapping a config without the GUI
+
+For a headless box, or just to get a rough config for a new clip in seconds:
+
+```bash
+python tools/derive_lane.py --source samples/cars2.mp4 --out config/cam1.yaml
+```
+
+It tracks the traffic, keeps the vehicles flowing in the dominant direction, and
+fits a lane around where they actually drove. On a divided road that isolates one
+carriageway — which is what you want, since a lane spanning both directions flags
+all oncoming traffic as wrong-way.
+
+Inspect the result before trusting it: it only knows about lanes that had traffic
+during the clip. Add `--reverse` to write the direction backwards on purpose —
+ordinary traffic then trips the wrong-way rule, which is a useful positive
+control proving the rule fires at all rather than being silent for some other
+reason.
+
+### Sample clips
+
+`samples/` is gitignored (fetched binaries, not authored). To reproduce the demo,
+fetch a public clip and derive its config:
+
+```bash
+mkdir -p samples
+curl -L -o samples/cars2.mp4 \
+  https://raw.githubusercontent.com/Abdelrahman5ames/Vehicle-Detection-Counting/HEAD/project/cars2.mp4
+python run.py --source samples/cars2.mp4 --config config/cars2_demo.yaml --stride 3 --show
+```
+
+`config/cars2_demo.yaml` is committed, so the demo runs without re-deriving
+geometry. These clips are fine for exercising the pipeline; they are **not**
+licensed for training data or redistribution, and at 640×360 they are well below
+real CCTV resolution.
 
 ## 2. Run
 
@@ -123,16 +167,31 @@ mean wrong-way needed 3× as much real evidence before firing, silently. If you
 add a rule, express its thresholds in seconds too — `tests/test_wrong_way.py`
 asserts that detection time is stride-invariant, and will catch you if you don't.
 
+## Measuring accuracy
+
+"It found 80 violations" is not an accuracy claim — a rule that fires on every
+vehicle also finds every violation. Score against hand-labelled ground truth:
+
+```bash
+python eval/evaluate.py --truth eval/ground_truth/cars2.csv \
+                        --pred evidence/violations.csv --verbose
+```
+
+Reports per-type precision, recall and F1. **For enforcement, precision matters
+more than recall**: a miss costs a ticket, a false positive accuses someone who
+did nothing. See `eval/README.md` for how to label honestly and how to split
+clips so you do not leak your test set into your tuning.
+
 ## Tests
 
 ```bash
 python tests/run_all.py            # or: pytest tests/
 ```
 
-31 tests over the geometry primitives and all three active rules. They need no
-model, no weights and no network — geometry and rule logic are deliberately
-dependency-free, so the suite runs on a bare interpreter. Only the four HSV
-light-state tests touch OpenCV, and they skip themselves if it is absent.
+42 tests over the geometry primitives, all three active rules, and the eval
+harness. They need no model, no weights and no network — that logic is
+deliberately dependency-free, so the suite runs on a bare interpreter. Only the
+four HSV light-state tests touch OpenCV, and they skip themselves if it is absent.
 
 The suite is written to pin down the behaviour that is easy to break silently:
 
@@ -193,8 +252,21 @@ contained change.
 
 ## Honest limitations
 
+- **No accuracy has been measured yet.** The pipeline has been verified to run
+  end-to-end and to fire correctly under a reversed-lane positive control, but
+  nobody has labelled ground truth, so there are no precision/recall numbers.
+  `eval/` exists to produce them; until it has been run on labelled clips, treat
+  every claim about how well this works as unverified.
+- **Small, distant and blurred vehicles track poorly**, and a rule can only fire
+  on a track that survives long enough to accumulate evidence. Observed directly:
+  on a 640×360 clip, vehicles on the far carriageway fragmented badly enough that
+  wrong-way missed them entirely. Expect recall to fall off with distance.
 - Accuracy depends heavily on camera angle, resolution, and correct calibration.
-- The HSV light-state estimator is a placeholder, not production-ready.
+- The HSV light-state estimator is a placeholder, not production-ready. It now
+  refuses to guess — it returns "unknown" unless one colour clearly dominates,
+  and the rule emits nothing on unknown — but refusing to guess is not the same
+  as being right. Replace it with a classifier trained on real signal crops
+  before enabling red-light enforcement.
 - Occlusion and dense traffic degrade tracking; expect tuning per site.
 - None of this is a substitute for legally admissible evidence standards — treat
   outputs as *candidates* for human review, especially for enforcement.

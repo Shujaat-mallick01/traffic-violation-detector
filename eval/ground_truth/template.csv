@@ -1,0 +1,7 @@
+timestamp_s,type,note
+# Copy this per clip and name it after the clip, e.g. cars2.csv
+# type must be one of: wrong_way, illegal_parking, red_light
+# Label every violation you can see, including ones you expect the model to miss.
+# Delete these comment lines before scoring.
+14.2,wrong_way,example - white hatchback against traffic in lane_1
+31.0,illegal_parking,example - van stopped on the hard shoulder

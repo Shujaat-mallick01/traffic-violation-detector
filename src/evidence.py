@@ -21,14 +21,37 @@ class EvidenceWriter:
         self.csv_path = os.path.join(out_dir, "violations.csv")
         self._csv_started = os.path.exists(self.csv_path)
 
+    FONT = 0                      # cv2.FONT_HERSHEY_SIMPLEX
+    FONT_SCALE = 0.6
+    FONT_THICKNESS = 2
+
     def _draw(self, frame, v: Violation):
+        """Box the offending vehicle and label it, keeping the label on-screen.
+
+        A violation near the right or top edge is exactly the case where the
+        label used to run off the frame, so the evidence image lost the very
+        text that explained it.
+        """
         import cv2
 
+        h, w = frame.shape[:2]
         x1, y1, x2, y2 = [int(c) for c in v.bbox]
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+
         label = f"{v.type} #{v.track_id} {v.detail}".strip()
-        cv2.putText(frame, label, (x1, max(12, y1 - 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        (tw, th), baseline = cv2.getTextSize(label, self.FONT, self.FONT_SCALE,
+                                             self.FONT_THICKNESS)
+        # Keep the text box inside the frame on both axes.
+        tx = max(0, min(x1, w - tw - 2))
+        ty = y1 - 8
+        if ty - th < 0:                       # no room above the box: go below it
+            ty = min(h - baseline - 1, y2 + th + 8)
+
+        # Solid backing so red text stays readable over light road surfaces.
+        cv2.rectangle(frame, (tx, ty - th - 3), (tx + tw + 2, ty + baseline),
+                      (255, 255, 255), -1)
+        cv2.putText(frame, label, (tx + 1, ty), self.FONT, self.FONT_SCALE,
+                    (0, 0, 255), self.FONT_THICKNESS)
         return frame
 
     def save(self, frame, violations: List[Violation]):

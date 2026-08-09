@@ -25,9 +25,15 @@ data/
 # The committed example stays; real camera configs do not.
 config/*.yaml
 !config/camera_example.yaml
+# Configs for the public sample clips: no credentials, and they let anyone
+# reproduce the demo run without re-deriving geometry.
+!config/*_demo.yaml
 
 # --- Tooling / OS ---
 .pytest_cache/
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
+
+# --- Sample/test footage (binaries; fetched, not authored) ---
+samples/
